@@ -1,214 +1,283 @@
 package com.pcoder23
 
+val movimentosPorData = Array(1000) {
+    mutableListOf<Movimento>()
 
-data class Movimento(
-    val montante: Int, val data: Int, val descricao: String, val tipo: Tipo, val ordem: Long
-)
-
-enum class Tipo {
-    RECEITA, DESPESA
 }
 
-class Utilizador {
+var balancoMinimo: Int = 0
 
-    val movimentosPorData: MutableMap<Int, MutableList<Movimento>> = mutableMapOf()
 
-    var valorMinimo: Int = 0
-    var contadorOrdem: Long = 0
 
-    // Insere um movimento único ou vários movimentos periódicos.
-    fun inserir(montante: Int, data: Int, periodicidade: Int, tipo: Tipo, descricao: String) {
-        var dataAtual = data
-
-        while (true) {
-            val lista = movimentosPorData.getOrPut(dataAtual) {
-                mutableListOf()
-            }
-
-            if (lista.size < 100) {
-                lista.add(
-                    Movimento(
-                        montante = montante, data = dataAtual, descricao = descricao, tipo = tipo, ordem = contadorOrdem++
-                    )
-                )
-            }
-
-            if (periodicidade == 0 || dataAtual + periodicidade > 999) {
-                break
-            }
-
-            dataAtual += periodicidade
-        }
-    }
-
-    // Lista os movimentos de uma data pela ordem de inserção.
-    fun listar(data: Int) {
-        val lista = movimentosPorData[data] ?: emptyList()
-
-        lista.forEachIndexed { indice, movimento ->
-            val tipo = if (movimento.tipo == Tipo.RECEITA) 'r' else 'd'
-
-            println(
-                "$indice ${movimento.montante} $tipo ${movimento.descricao}"
-            )
-        }
-    }
-
-    // Remove um movimento pelo índice apresentado na listagem.
-    fun remover(data: Int, indice: Int) {
-        val lista = movimentosPorData[data] ?: return
-
-        if (indice in lista.indices) {
-            lista.removeAt(indice)
-
-            if (lista.isEmpty()) {
-                movimentosPorData.remove(data)
-            }
-        }
-    }
-
-    // Calcula o balanço acumulado de todas as datas.
-    fun arrayBalancos(): IntArray {
-        val balancos = IntArray(1000)
-        var balanco = 0
-
-        for (data in 0..999) {
-            movimentosPorData[data]?.forEach { movimento ->
-                balanco += if (movimento.tipo == Tipo.RECEITA) {
-                    movimento.montante
-                } else {
-                    -movimento.montante
-                }
-            }
-
-            balancos[data] = balanco
-        }
-
-        return balancos
-    }
-
-    // Apresenta o balanço acumulado até à data indicada.
-    fun calcularBalanco(data: Int): Int {
-        return arrayBalancos()[data]
-    }
-
-    // Altera o balanço mínimo permitido.
-    fun alterarValorMinimo(novoValor: Int) {
-        valorMinimo = novoValor
-    }
-
-    // Verifica se o balanço respeita o mínimo em todas as datas.
-    fun orcamentoValido(): Boolean {
-        return arrayBalancos().all { it >= valorMinimo }
-    }
-
-    // Procura a primeira data em que a despesa não invalida
-    // o orçamento, considerando todas as datas até 999.
-    fun primeiraDataComportavel(dataInicial: Int, despesa: Int): Int? {
-        val balancos = arrayBalancos()
-
-        for (data in dataInicial..999) {
-            var valido = true
-
-            for (dataVerificada in 0..999) {
-                val balancoDepoisDaDespesa = if (dataVerificada >= data) {
-                    balancos[dataVerificada] - despesa
-                } else {
-                    balancos[dataVerificada]
-                }
-
-                if (balancoDepoisDaDespesa < valorMinimo) {
-                    valido = false
-                    break
-                }
-            }
-
-            if (valido) {
-                return data
-            }
-        }
-
-        return null
-    }
-}
-
-fun processarComando(linha: String, utilizador: Utilizador) {
-    val partes = linha.trim().split(Regex("\\s+"))
-
-    if (partes.isEmpty() || partes[0].isEmpty()) return
+fun processarComando(cmd: String) {
+    val partes = cmd.trim().split(Regex("\\s+"))
 
     when (partes[0]) {
-        "i" -> {
-            val montante = partes[1].toInt()
-            val data = partes[2].toInt()
-            val periodicidade = partes[3].toInt()
+        "i" -> inserirMovimento(partes.drop(1))
+        "l" -> listarMovimentos(partes.drop(1))
+        "r" -> removerMovimento(partes.drop(1))
+        "b" -> calcularBalanco(partes.drop(1))
+        "m" -> alterarMinimo(partes.drop(1))
+        "v" -> verificarOrcamento()
+        "w" -> determinarDataComportavel(partes.drop(1))
+        "exit" -> println("Comando exit: vamos implementar o encerramento da sessão mais tarde.")
+        else -> println("Comando desconhecido: ${partes[0]}")
+    }
+}
 
-            val tipo = when (partes[4]) {
-                "r" -> Tipo.RECEITA
-                else -> Tipo.DESPESA
+fun inserirMovimento(args: List<String>) {
+
+    if (args.size < 5) {
+        println("Erro: Argumentos insuficientes. [ex: i 10000 0 30 r Salario]")
+        return
+    }
+
+    if (args[0].toIntOrNull() == null) {
+        println("Insira o montante de movimento [ex: i 10000]")
+        return
+    }
+
+    if (args[1].toIntOrNull() == null) {
+        println("Insira a data em que o movimento estara a ser realizado [ex: i 10000 0]")
+        return
+    }
+
+    if (args[2].toIntOrNull() == null) {
+        println("Insira a periodicidade do movimento [ex: i 10000 0 30]")
+        return
+    }
+
+    if (args[3].isEmpty() || (args[3][0] != 'r' && args[3][0] != 'd')) {
+        println("Insira o tipo de movimento: despesa (d) ou receita (r) [ex: i 10000 0 r/d]")
+        return
+    }
+
+    if (args[4].isBlank()) {
+        println("Insira a descricao do movimento [ex: i 10000 0 r/d descricao]")
+        return
+    }
+
+    val montante = args[0].toInt()
+    val dataInicial = args[1].toInt()
+    val periodicidade = args[2].toInt()
+    val tipo = args[3][0]
+    val descricao = args[4]
+
+    var data = dataInicial
+
+    do {
+        val movimento = Movimento(
+            ordem = movimentosPorData[data].size,
+            montante = montante,
+            data = data,
+            tipo = tipo,
+            descricao = descricao
+        )
+
+        movimentosPorData[data].add(movimento)
+
+        if (periodicidade == 0) {
+            break
+        }
+
+        data += periodicidade
+
+    } while (data <= 999)
+
+    println("Movimento(s) inserido(s) com sucesso!")
+}
+
+
+fun listarMovimentos(args: List<String>) {
+    val data = args[0].toInt()
+    val movimentos = movimentosPorData[data]
+
+    for (movimento in movimentos) {
+        println(
+            "${movimento.ordem} ${movimento.montante} ${movimento.tipo} ${movimento.descricao}"
+        )
+    }
+}
+
+
+fun removerMovimento(args: List<String>) {
+    if (args.size < 2) {
+        println("Uso: r <data> <ordem>")
+        return
+    }
+
+    val data = args[0].toIntOrNull()
+    val ordem = args[1].toIntOrNull()
+
+    if (data == null || data !in 0..999) {
+        println("Data inválida.")
+        return
+    }
+
+    if (ordem == null || ordem < 0) {
+        println("Ordem inválida.")
+        return
+    }
+
+    val movimentos = movimentosPorData[data]
+
+    val indice = movimentos.indexOfFirst {
+        it.ordem == ordem
+    }
+
+    if (indice == -1) {
+        println("Movimento não encontrado.")
+        return
+    }
+
+    movimentos.removeAt(indice)
+
+    for (i in movimentos.indices) {
+        val movimento = movimentos[i]
+
+        movimentos[i] = movimento.copy(ordem = i)
+    }
+
+    println("Movimento removido com sucesso!")
+}
+
+
+
+fun calcularBalanco(args: List<String>) {
+    if (args.isEmpty()) {
+        println("Uso: b <data>")
+        return
+    }
+
+    val data = args[0].toIntOrNull()
+
+    if (data == null || data !in 0..999) {
+        println("Data inválida.")
+        return
+    }
+
+    var balanco = 0
+
+    for (dia in 0..data) {
+        for (movimento in movimentosPorData[dia]) {
+            when (movimento.tipo) {
+                'r' -> balanco += movimento.montante
+                'd' -> balanco -= movimento.montante
             }
-
-            val descricao = partes[5]
-
-            utilizador.inserir(
-                montante, data, periodicidade, tipo, descricao
-            )
-        }
-
-        "l" -> {
-            val data = partes[1].toInt()
-            utilizador.listar(data)
-        }
-
-        "r" -> {
-            val data = partes[1].toInt()
-            val indice = partes[2].toInt()
-
-            utilizador.remover(data, indice)
-        }
-
-        "b" -> {
-            val data = partes[1].toInt()
-            println(utilizador.calcularBalanco(data))
-        }
-
-        "m" -> {
-            val novoValor = partes[1].toInt()
-            utilizador.alterarValorMinimo(novoValor)
-        }
-
-        "v" -> {
-            println(
-                if (utilizador.orcamentoValido()) {
-                    "Valido"
-                } else {
-                    "Invalido"
-                }
-            )
-        }
-
-        "w" -> {
-            val dataInicial = partes[1].toInt()
-            val despesa = partes[2].toInt()
-
-            val resultado = utilizador.primeiraDataComportavel(
-                dataInicial, despesa
-            )
-
-            println(resultado ?: "Incomportavel")
         }
     }
+
+    println(balanco)
+}
+
+
+fun alterarMinimo(args: List<String>) {
+    if (args.isEmpty()) {
+        println("Uso: m <valor mínimo>")
+        return
+    }
+
+    val novoMinimo = args[0].toIntOrNull()
+
+    if (novoMinimo == null) {
+        println("Valor mínimo inválido.")
+        return
+    }
+
+    balancoMinimo = novoMinimo
+}
+
+
+fun verificarOrcamento() {
+    var balanco = 0
+
+    for (data in 0..999) {
+        for (movimento in movimentosPorData[data]) {
+            when (movimento.tipo) {
+                'r' -> balanco += movimento.montante
+                'd' -> balanco -= movimento.montante
+            }
+        }
+
+        if (balanco < balancoMinimo) {
+            println("Invalido")
+            return
+        }
+    }
+
+    println("Valido")
+}
+
+
+
+fun determinarDataComportavel(args: List<String>) {
+    if (args.size < 2) {
+        println("Uso: w <dataInicial> <montanteDespesa>")
+        return
+    }
+
+    val dataInicial = args[0].toIntOrNull()
+    val montanteDespesa = args[1].toIntOrNull()
+
+    if (dataInicial == null || dataInicial !in 0..999) {
+        println("Data inicial inválida.")
+        return
+    }
+
+    if (montanteDespesa == null || montanteDespesa < 0) {
+        println("Montante da despesa inválido.")
+        return
+    }
+
+    // 1. Calcular o balanço existente em cada dia
+    val balancos = IntArray(1000)
+    var balanco = 0
+
+    for (dia in 0..999) {
+        for (movimento in movimentosPorData[dia]) {
+            when (movimento.tipo) {
+                'r' -> balanco += movimento.montante
+                'd' -> balanco -= movimento.montante
+            }
+        }
+
+        balancos[dia] = balanco
+    }
+
+    // 2. Se o orçamento já é inválido, não existe solução
+    if (balancos.any { it < balancoMinimo }) {
+        println("Incomportavel")
+        return
+    }
+
+    // 3. Calcular o menor balanço futuro para cada dia
+    val menorBalancoFuturo = IntArray(1000)
+
+    menorBalancoFuturo[999] = balancos[999]
+
+    for (dia in 998 downTo 0) {
+        menorBalancoFuturo[dia] = minOf(
+            balancos[dia],
+            menorBalancoFuturo[dia + 1]
+        )
+    }
+
+    // 4. Procurar a primeira data em que a despesa é possível
+    for (dia in dataInicial..999) {
+        if (menorBalancoFuturo[dia] - montanteDespesa >= balancoMinimo) {
+            println(dia)
+            return
+        }
+    }
+
+    println("Incomportavel")
 }
 
 fun main() {
-    val utilizador = Utilizador()
-
     while (true) {
         print(">>> ")
-        val linha = readlnOrNull() ?: break
+        val cmd = readln()
 
-        if (linha.isBlank()) continue
-
-        processarComando(linha, utilizador)
+        processarComando(cmd)
     }
 }
